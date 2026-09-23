@@ -1,5 +1,6 @@
 package com.evcharging.providerservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -23,6 +24,9 @@ public class ProviderDTO {
     private String email;
     @NotBlank(message = "Phone number is required")
     private String phoneNumber;
+    /** Only used on registration; validated in ProviderService, not here, since this DTO is reused for updates. */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String password;
     @NotBlank(message = "Address is required")
     private String address;
     @NotBlank(message = "City is required")

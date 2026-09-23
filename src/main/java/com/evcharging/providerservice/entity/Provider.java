@@ -75,6 +75,10 @@ public class Provider {
     @Column
     private String oauthId;
 
+    /** Null for legacy accounts registered before password auth. BCrypt hash, never the raw password. */
+    @Column(name = "password_hash")
+    private String passwordHash;
+
     @Column(nullable = false)
     private Boolean isActive = true;
 

@@ -4,6 +4,7 @@ import com.evcharging.providerservice.dto.ProviderDTO;
 import com.evcharging.providerservice.entity.Provider;
 import com.evcharging.providerservice.repository.ProviderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,9 +18,18 @@ public class ProviderService {
     @Autowired
     private ProviderRepository providerRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     public ProviderDTO registerProvider(ProviderDTO providerDTO) {
         if (providerRepository.findByEmail(providerDTO.getEmail()).isPresent()) {
             throw new RuntimeException("Provider with email already exists");
+        }
+        if (providerDTO.getPassword() == null || providerDTO.getPassword().isBlank()) {
+            throw new RuntimeException("Password is required");
+        }
+        if (providerDTO.getPassword().length() < 8) {
+            throw new RuntimeException("Password must be at least 8 characters");
         }
 
         Provider provider = new Provider();
@@ -27,6 +37,7 @@ public class ProviderService {
         provider.setContactPersonName(providerDTO.getContactPersonName());
         provider.setEmail(providerDTO.getEmail());
         provider.setPhoneNumber(providerDTO.getPhoneNumber());
+        provider.setPasswordHash(passwordEncoder.encode(providerDTO.getPassword()));
         provider.setAddress(providerDTO.getAddress());
         provider.setCity(providerDTO.getCity());
         provider.setState(providerDTO.getState());
@@ -40,6 +51,20 @@ public class ProviderService {
 
         Provider savedProvider = providerRepository.save(provider);
         return convertToDTO(savedProvider);
+    }
+
+    /** Throws the same generic error for "no such account" and "wrong password" to avoid account enumeration. */
+    public ProviderDTO login(String email, String rawPassword) {
+        Provider provider = providerRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Invalid email or password"));
+
+        if (provider.getPasswordHash() == null || !passwordEncoder.matches(rawPassword, provider.getPasswordHash())) {
+            throw new RuntimeException("Invalid email or password");
+        }
+        if (!Boolean.TRUE.equals(provider.getIsActive())) {
+            throw new RuntimeException("This account has been deactivated");
+        }
+        return convertToDTO(provider);
     }
 
     public ProviderDTO getProviderById(Long providerId) {

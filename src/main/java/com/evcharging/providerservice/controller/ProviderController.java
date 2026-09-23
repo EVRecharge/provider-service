@@ -1,6 +1,8 @@
 package com.evcharging.providerservice.controller;
 
+import com.evcharging.providerservice.dto.LoginRequest;
 import com.evcharging.providerservice.dto.ProviderDTO;
+import com.evcharging.providerservice.security.JwtTokenProvider;
 import com.evcharging.providerservice.service.ProviderService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -19,18 +21,45 @@ public class ProviderController {
     @Autowired
     private ProviderService providerService;
 
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
+
     @PostMapping("/register")
     public ResponseEntity<?> registerProvider(@Valid @RequestBody ProviderDTO providerDTO) {
         try {
             ProviderDTO registeredProvider = providerService.registerProvider(providerDTO);
+            String token = jwtTokenProvider.generateToken(registeredProvider.getEmail(), registeredProvider.getProviderId());
+            String refreshToken = jwtTokenProvider.generateRefreshToken(registeredProvider.getEmail(), registeredProvider.getProviderId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Provider registered successfully");
             response.put("provider", registeredProvider);
+            response.put("token", token);
+            response.put("refreshToken", refreshToken);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
+        try {
+            ProviderDTO provider = providerService.login(loginRequest.getEmail(), loginRequest.getPassword());
+            String token = jwtTokenProvider.generateToken(provider.getEmail(), provider.getProviderId());
+            String refreshToken = jwtTokenProvider.generateRefreshToken(provider.getEmail(), provider.getProviderId());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Login successful");
+            response.put("provider", provider);
+            response.put("token", token);
+            response.put("refreshToken", refreshToken);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", e.getMessage()));
         }
     }
