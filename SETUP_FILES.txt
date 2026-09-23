@@ -1,0 +1,175 @@
+# ============= DOCKER COMPOSE =============
+# File: provider-service/docker-compose.yml
+version: '3.8'
+
+services:
+  provider-service-postgres:
+    image: postgres:13-alpine
+    container_name: provider-service-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-ev_provider_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - provider-service-db:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - provider-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  provider-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: provider-service
+    ports:
+      - "8002:8002"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILE:-dev}
+      DB_HOST: provider-service-postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-ev_provider_db}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      EUREKA_SERVER: ${EUREKA_SERVER:-http://localhost:8761/eureka/}
+      JWT_SECRET: ${JWT_SECRET:-mySecretKeyForJWTTokenGenerationAndValidationWithMinimum32Characters}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m}
+    networks:
+      - provider-service-network
+    depends_on:
+      provider-service-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  provider-service-db:
+    driver: local
+
+networks:
+  provider-service-network:
+    driver: bridge
+
+---
+# ============= DATABASE INIT SQL =============
+# File: provider-service/init-db.sql
+CREATE TABLE IF NOT EXISTS providers (
+    provider_id SERIAL PRIMARY KEY,
+    company_name VARCHAR(200) NOT NULL,
+    contact_person_name VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    phone_number VARCHAR(20) NOT NULL UNIQUE,
+    address VARCHAR(500) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(50) NOT NULL,
+    zip_code VARCHAR(20) NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    rate_per_hour DOUBLE PRECISION NOT NULL,
+    charger_type VARCHAR(50),
+    max_concurrent_charges INTEGER,
+    oauth_provider VARCHAR(50),
+    oauth_id VARCHAR(255),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_providers_email ON providers(email);
+CREATE INDEX IF NOT EXISTS idx_providers_city ON providers(city);
+CREATE INDEX IF NOT EXISTS idx_providers_location ON providers(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_providers_active ON providers(is_active);
+
+---
+# ============= ENVIRONMENT CONFIG =============
+# File: provider-service/.env
+SERVICE_NAME=provider-service
+SERVICE_VERSION=1.0.0
+SERVER_PORT=8002
+
+DB_HOST=provider-service-postgres
+DB_PORT=5432
+DB_NAME=ev_provider_db
+DB_USER=postgres
+DB_PASSWORD=postgres
+
+SPRING_PROFILE=dev
+
+EUREKA_SERVER=http://localhost:8761/eureka/
+
+JWT_SECRET=mySecretKeyForJWTTokenGenerationAndValidationWithMinimum32Characters
+JWT_EXPIRATION=86400000
+JWT_REFRESH_EXPIRATION=604800000
+
+JAVA_OPTS=-Xms256m -Xmx512m
+
+LOG_LEVEL=INFO
+LOG_FILE_PATH=logs/provider-service.log
+
+---
+# ============= DOCKERFILE =============
+# File: provider-service/Dockerfile
+FROM maven:3.8.1-openjdk-11 AS builder
+WORKDIR /build
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+FROM openjdk:11-jre-slim
+WORKDIR /app
+
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+COPY --from=builder /build/target/provider-service-*.jar provider-service.jar
+
+RUN mkdir -p logs && chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8002
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD java -cp provider-service.jar org.springframework.boot.loader.JarLauncher || exit 1
+
+ENTRYPOINT ["java", "-jar", "provider-service.jar"]
+
+---
+# ============= GITIGNORE =============
+# File: provider-service/.gitignore
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+target/
+build/
+*.jar
+*.war
+pom.xml.tag
+pom.xml.releaseBackup
+.m2/
+logs/
+*.log
+.env
+.env.local
+docker-compose.override.yml
+Thumbs.db
+tmp/
+temp/
