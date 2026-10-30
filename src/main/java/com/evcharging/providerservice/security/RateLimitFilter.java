@@ -24,7 +24,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int MAX_REQUESTS_PER_WINDOW = 10;
     private static final long WINDOW_MILLIS = 60_000;
     private static final Set<String> LIMITED_PATHS = Set.of(
-            "/api/providers/login", "/api/providers/register");
+            "/api/providers/login", "/api/providers/login/mfa", "/api/providers/register");
 
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
 

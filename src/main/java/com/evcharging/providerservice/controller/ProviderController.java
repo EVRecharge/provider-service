@@ -10,7 +10,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import com.evcharging.providerservice.dto.MfaCodeRequest;
+import com.evcharging.providerservice.dto.MfaLoginRequest;
+import com.evcharging.providerservice.mfa.MfaService;
+import com.evcharging.providerservice.repository.ProviderRepository;
+import com.evcharging.providerservice.entity.Provider;
 import javax.validation.Valid;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,6 +29,12 @@ public class ProviderController {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+
+    @Autowired
+    private ProviderRepository providerRepository;
+
+    @Autowired
+    private MfaService mfaService;
 
     @PostMapping("/register")
     public ResponseEntity<?> registerProvider(@Valid @RequestBody ProviderDTO providerDTO) {
@@ -48,6 +60,11 @@ public class ProviderController {
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         try {
             ProviderDTO provider = providerService.login(loginRequest.getEmail(), loginRequest.getPassword());
+            if (Boolean.TRUE.equals(provider.getMfaEnabled())) {
+                return ResponseEntity.ok(Map.of(
+                        "mfaRequired", true,
+                        "mfaToken", jwtTokenProvider.generateMfaChallengeToken(provider.getEmail(), provider.getProviderId(), "PROVIDER")));
+            }
             String token = jwtTokenProvider.generateToken(provider.getEmail(), provider.getProviderId(), "PROVIDER");
             String refreshToken = jwtTokenProvider.generateRefreshToken(provider.getEmail(), provider.getProviderId(), "PROVIDER");
 
@@ -62,6 +79,105 @@ public class ProviderController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", e.getMessage()));
         }
+    }
+
+    @PostMapping("/login/mfa")
+    public ResponseEntity<?> loginWithMfa(@Valid @RequestBody MfaLoginRequest request) {
+        Long id;
+        try {
+            id = jwtTokenProvider.parseMfaChallenge(request.getMfaToken(), "PROVIDER");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Your sign-in session expired. Please sign in again."));
+        }
+        Provider account = providerRepository.findById(id).orElse(null);
+        if (account == null || !Boolean.TRUE.equals(account.getIsActive()) || !mfaService.isEnabled(account)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Sign-in failed"));
+        }
+        MfaService.Result result = mfaService.verify(account, request.getCode());
+        providerRepository.save(account);
+        if (result == MfaService.Result.LOCKED) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Too many incorrect codes. Try again in 15 minutes."));
+        }
+        if (result != MfaService.Result.OK) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid verification code"));
+        }
+        String token = jwtTokenProvider.generateToken(account.getEmail(), account.getProviderId(), "PROVIDER");
+        String refreshToken = jwtTokenProvider.generateRefreshToken(account.getEmail(), account.getProviderId(), "PROVIDER");
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Login successful");
+        response.put("provider", providerService.getProviderById(id));
+        response.put("token", token);
+        response.put("refreshToken", refreshToken);
+        return ResponseEntity.ok(response);
+    }
+
+    /** Step 1 of enrolling an authenticator app: returns the secret and otpauth:// URI to show as a QR code. */
+    @PostMapping("/{providerId}/mfa/setup")
+    public ResponseEntity<?> mfaSetup(@PathVariable Long providerId) {
+        if (!isSelf(providerId)) {
+            return mfaForbidden();
+        }
+        try {
+            Provider account = providerRepository.findById(providerId).orElseThrow(() -> new RuntimeException("Account not found"));
+            MfaService.Setup setup = mfaService.beginSetup(account);
+            providerRepository.save(account);
+            return ResponseEntity.ok(Map.of("secret", setup.secret(), "otpAuthUri", setup.otpAuthUri()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Step 2: confirm with a code from the app. Returns the one-time recovery codes -- shown only once. */
+    @PostMapping("/{providerId}/mfa/enable")
+    public ResponseEntity<?> mfaEnable(@PathVariable Long providerId, @Valid @RequestBody MfaCodeRequest request) {
+        if (!isSelf(providerId)) {
+            return mfaForbidden();
+        }
+        try {
+            Provider account = providerRepository.findById(providerId).orElseThrow(() -> new RuntimeException("Account not found"));
+            List<String> recoveryCodes = mfaService.enable(account, request.getCode().replaceAll("\\s", ""));
+            providerRepository.save(account);
+            return ResponseEntity.ok(Map.of("recoveryCodes", recoveryCodes));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Turning MFA off needs a valid authenticator or recovery code, so a stolen session alone can't do it. */
+    @PostMapping("/{providerId}/mfa/disable")
+    public ResponseEntity<?> mfaDisable(@PathVariable Long providerId, @Valid @RequestBody MfaCodeRequest request) {
+        if (!isSelf(providerId)) {
+            return mfaForbidden();
+        }
+        Provider account = providerRepository.findById(providerId).orElse(null);
+        if (account == null || !mfaService.isEnabled(account)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Two-factor authentication is not enabled"));
+        }
+        MfaService.Result result = mfaService.verify(account, request.getCode());
+        if (result == MfaService.Result.OK) {
+            mfaService.disable(account);
+        }
+        providerRepository.save(account);
+        if (result == MfaService.Result.LOCKED) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "Too many incorrect codes. Try again in 15 minutes."));
+        }
+        if (result != MfaService.Result.OK) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid verification code"));
+        }
+        return ResponseEntity.ok(Map.of("message", "Two-factor authentication turned off"));
+    }
+
+    private ResponseEntity<?> mfaForbidden() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "You can only manage two-factor authentication for your own account"));
     }
 
     @GetMapping("/{providerId}")

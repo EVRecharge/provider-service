@@ -43,6 +43,9 @@ public class ProviderDTO {
     private Double ratePerHour;
     private String chargerType;
     private Integer maxConcurrentCharges;
+    /** Read-only: whether this account requires a second factor at sign-in. */
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Boolean mfaEnabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

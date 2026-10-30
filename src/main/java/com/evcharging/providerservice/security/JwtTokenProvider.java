@@ -44,6 +44,25 @@ public class JwtTokenProvider {
         return createToken(claims, email, refreshTokenExpirationMs);
     }
 
+    /** Short-lived token proving the password step passed; only good for POST .../login/mfa, never for API access. */
+    public String generateMfaChallengeToken(String email, Long entityId, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("entityId", entityId);
+        claims.put("entityType", "MFA");
+        claims.put("mfaFor", role);
+        claims.put("type", "mfa");
+        return createToken(claims, email, 5 * 60 * 1000L);
+    }
+
+    /** Returns the account id the challenge was issued for; throws if the token isn't a valid challenge for this role. */
+    public Long parseMfaChallenge(String token, String role) {
+        Claims claims = getAllClaimsFromToken(token);
+        if (!"mfa".equals(claims.get("type", String.class)) || !role.equals(claims.get("mfaFor", String.class))) {
+            throw new IllegalArgumentException("Not an MFA challenge token");
+        }
+        return claims.get("entityId", Long.class);
+    }
+
     private String createToken(Map<String, Object> claims, String subject, long expirationTime) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + expirationTime);

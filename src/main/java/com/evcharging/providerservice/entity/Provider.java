@@ -9,6 +9,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import javax.persistence.*;
 import javax.validation.constraints.Email;
 import javax.validation.constraints.NotBlank;
+import com.evcharging.providerservice.mfa.MfaAccount;
 import java.time.LocalDateTime;
 
 @Entity
@@ -20,7 +21,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Provider {
+public class Provider implements MfaAccount {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -81,6 +82,25 @@ public class Provider {
 
     @Column(nullable = false)
     private Boolean isActive = true;
+
+    @Column(name = "mfa_enabled")
+    private Boolean mfaEnabled = false;
+
+    /** AES-GCM encrypted base32 TOTP secret. Never serialized to clients. */
+    @Column(name = "mfa_secret", length = 255)
+    private String mfaSecret;
+
+    @Column(name = "mfa_last_step")
+    private Long mfaLastStep;
+
+    @Column(name = "mfa_recovery_codes", length = 1024)
+    private String mfaRecoveryCodes;
+
+    @Column(name = "mfa_failed_attempts")
+    private Integer mfaFailedAttempts = 0;
+
+    @Column(name = "mfa_locked_until")
+    private LocalDateTime mfaLockedUntil;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)

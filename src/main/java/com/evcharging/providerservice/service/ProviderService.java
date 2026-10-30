@@ -146,6 +146,7 @@ public class ProviderService {
         dto.setRatePerHour(provider.getRatePerHour());
         dto.setChargerType(provider.getChargerType());
         dto.setMaxConcurrentCharges(provider.getMaxConcurrentCharges());
+        dto.setMfaEnabled(Boolean.TRUE.equals(provider.getMfaEnabled()));
         dto.setCreatedAt(provider.getCreatedAt());
         dto.setUpdatedAt(provider.getUpdatedAt());
         return dto;

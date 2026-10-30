@@ -43,7 +43,7 @@ public class SecurityConfig {
                 .cors().and()
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .antMatchers("/api/providers/register", "/api/providers/login").permitAll()
+                        .antMatchers("/api/providers/register", "/api/providers/login", "/api/providers/login/mfa").permitAll()
                         .antMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated()
                 )
