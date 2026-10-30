@@ -39,9 +39,11 @@ public class StationService {
         return stationRepository.save(fromProvider(provider));
     }
 
-    public List<StationDTO> listForProvider(Long providerId) {
+    public List<StationDTO> listForProvider(Long providerId, boolean activeOnly) {
         return stationRepository.findByProviderIdOrderByStationIdAsc(providerId)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+                .stream()
+                .filter(s -> !activeOnly || Boolean.TRUE.equals(s.getIsActive()))
+                .map(this::toDTO).collect(Collectors.toList());
     }
 
     public List<StationDTO> listActive() {

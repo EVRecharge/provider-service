@@ -12,7 +12,7 @@ import javax.validation.Valid;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/providers")
 public class StationController {
 
     @Autowired
@@ -33,12 +33,13 @@ public class StationController {
         }
     }
 
-    @GetMapping("/providers/{providerId}/stations")
-    public ResponseEntity<?> listForProvider(@PathVariable Long providerId) {
-        return ResponseEntity.ok(stationService.listForProvider(providerId));
+    @GetMapping("/{providerId}/stations")
+    public ResponseEntity<?> listForProvider(@PathVariable Long providerId,
+                                             @RequestParam(defaultValue = "false") boolean activeOnly) {
+        return ResponseEntity.ok(stationService.listForProvider(providerId, activeOnly));
     }
 
-    @PostMapping("/providers/{providerId}/stations")
+    @PostMapping("/{providerId}/stations")
     public ResponseEntity<?> create(@PathVariable Long providerId, @Valid @RequestBody StationDTO dto) {
         if (!isProvider(providerId)) {
             return forbidden("You can only add stations to your own account");
