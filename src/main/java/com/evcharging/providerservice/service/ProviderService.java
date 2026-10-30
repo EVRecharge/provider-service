@@ -21,6 +21,9 @@ public class ProviderService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private StationService stationService;
+
     public ProviderDTO registerProvider(ProviderDTO providerDTO) {
         if (providerRepository.findByEmail(providerDTO.getEmail()).isPresent()) {
             throw new RuntimeException("Provider with email already exists");
@@ -50,6 +53,7 @@ public class ProviderService {
         provider.setIsActive(true);
 
         Provider savedProvider = providerRepository.save(provider);
+        stationService.createDefaultStation(savedProvider);
         return convertToDTO(savedProvider);
     }
 
@@ -111,6 +115,7 @@ public class ProviderService {
         provider.setMaxConcurrentCharges(providerDTO.getMaxConcurrentCharges());
 
         Provider updatedProvider = providerRepository.save(provider);
+        stationService.syncPrimaryStation(updatedProvider);
         return convertToDTO(updatedProvider);
     }
 
