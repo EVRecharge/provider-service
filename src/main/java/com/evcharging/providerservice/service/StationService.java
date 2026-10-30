@@ -83,23 +83,6 @@ public class StationService {
         return find(stationId).getProviderId();
     }
 
-    /** Keeps the account's first station in step with edits made on the legacy single-station profile form. */
-    public void syncPrimaryStation(Provider provider) {
-        stationRepository.findByProviderIdOrderByStationIdAsc(provider.getProviderId()).stream().findFirst()
-                .ifPresent(s -> {
-                    s.setAddress(provider.getAddress());
-                    s.setCity(provider.getCity());
-                    s.setState(provider.getState());
-                    s.setZipCode(provider.getZipCode());
-                    s.setLatitude(provider.getLatitude());
-                    s.setLongitude(provider.getLongitude());
-                    s.setRatePerHour(provider.getRatePerHour());
-                    s.setChargerType(provider.getChargerType());
-                    s.setMaxConcurrentCharges(provider.getMaxConcurrentCharges());
-                    stationRepository.save(s);
-                });
-    }
-
     private Station find(Long stationId) {
         return stationRepository.findById(stationId)
                 .orElseThrow(() -> new RuntimeException("Station not found with id: " + stationId));

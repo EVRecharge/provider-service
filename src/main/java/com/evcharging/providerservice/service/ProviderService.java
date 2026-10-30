@@ -115,7 +115,6 @@ public class ProviderService {
         provider.setMaxConcurrentCharges(providerDTO.getMaxConcurrentCharges());
 
         Provider updatedProvider = providerRepository.save(provider);
-        stationService.syncPrimaryStation(updatedProvider);
         return convertToDTO(updatedProvider);
     }
 
