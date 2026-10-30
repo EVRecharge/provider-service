@@ -46,6 +46,18 @@ public class ProviderDTO {
     /** Read-only: whether this account requires a second factor at sign-in. */
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Boolean mfaEnabled;
+    /** Write-only: a new PAN. Blank keeps the one on file. Returned only masked, as panMasked. */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String panNumber;
+    /** Write-only: a new Aadhaar number. Blank keeps the one on file. Returned only masked. */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private String aadhaarNumber;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String panMasked;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private String aadhaarMasked;
+    /** Optional profile photo (image data URL). Empty string removes it; absent keeps it. */
+    private String profilePicture;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

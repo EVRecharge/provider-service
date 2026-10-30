@@ -102,6 +102,17 @@ public class Provider implements MfaAccount {
     @Column(name = "mfa_locked_until")
     private LocalDateTime mfaLockedUntil;
 
+    /** AES-GCM encrypted PAN / Aadhaar numbers; one of the two is required on the profile. Never serialized as-is. */
+    @Column(name = "pan_number_enc", length = 255)
+    private String panNumberEnc;
+
+    @Column(name = "aadhaar_number_enc", length = 255)
+    private String aadhaarNumberEnc;
+
+    /** Optional profile photo as a small (client-resized) image data URL. */
+    @Column(name = "profile_picture", columnDefinition = "TEXT")
+    private String profilePicture;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

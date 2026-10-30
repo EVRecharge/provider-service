@@ -232,6 +232,9 @@ public class ProviderController {
         try {
             ProviderDTO updatedProvider = providerService.updateProvider(providerId, providerDTO);
             return ResponseEntity.ok(updatedProvider);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", e.getMessage()));
